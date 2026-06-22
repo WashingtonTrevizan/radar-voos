@@ -7,7 +7,7 @@ com altitude, velocidade, rumo e país de origem.
 O mapa começa centralizado na região de **São José dos Campos (SP)**, mas
 funciona para qualquer lugar do mundo: basta arrastar ou dar zoom.
 
-![status](https://img.shields.io/badge/dados-OpenSky%20Network-4cc2ff)
+![status](https://img.shields.io/badge/dados-airplanes.live-4cc2ff)
 
 ## ✨ Funcionalidades
 
@@ -45,29 +45,33 @@ Depois abra `http://localhost:8000` no navegador.
 3. Salve. Em alguns instantes o app fica disponível em
    `https://SEU_USUARIO.github.io/radar-voos/`.
 
-## 🛰️ Sobre a API de dados (OpenSky Network)
+## 🛰️ Sobre a API de dados (airplanes.live)
 
-Os dados de voo vêm da [OpenSky Network](https://opensky-network.org), uma
-rede colaborativa e gratuita de receptores ADS-B.
+Os dados de voo vêm da [airplanes.live](https://airplanes.live), uma rede
+colaborativa e gratuita de receptores ADS-B, com **API REST aberta e CORS
+liberado** — por isso funciona direto do navegador, sem backend nem chave.
 
-- O app consulta o endpoint `/api/states/all` filtrando pela **área visível**
-  do mapa (bounding box), o que reduz o volume de dados e o consumo de cota.
-- O **acesso anônimo** é gratuito, porém com **limite de requisições**. Se você
-  vir a mensagem de "limite atingido", espere alguns segundos ou aumente o
-  intervalo de atualização (`REFRESH_MS` em `app.js`).
-- Para limites maiores, crie uma conta gratuita na OpenSky e use credenciais
-  (atualmente via OAuth2 client credentials). Veja a
-  [documentação da API](https://openskynetwork.github.io/opensky-api/).
+- O app consulta o endpoint `/v2/point/{lat}/{lon}/{raio}`, usando o **centro
+  da área visível** do mapa e um **raio** (em milhas náuticas) que cobre o que
+  está na tela. Depois filtra os resultados pela bounding box visível.
+- Use com responsabilidade: a airplanes.live pede **no máximo ~1 requisição por
+  segundo**. O app respeita isso (atualização a cada 12 s + proteção contra
+  requisições sobrepostas). Para mudar, ajuste `REFRESH_MS` em `app.js`.
+
+> **Por que não OpenSky?** A OpenSky passou a restringir o `Access-Control-Allow-Origin`
+> à própria origem, o que faz o navegador bloquear (erro "Failed to fetch") quando
+> o app roda em outro domínio (ex.: GitHub Pages). A airplanes.live não tem esse
+> problema.
 
 ### Outras APIs públicas de voos (alternativas)
 
-| API | Gratuita? | Bom para |
-|-----|-----------|----------|
-| **OpenSky Network** | Sim (com limites) | Posições ao vivo (ADS-B) — usada aqui |
-| AviationStack | Freemium | Horários e status de voos |
-| AeroDataBox (RapidAPI) | Freemium | Escalas por aeroporto |
-| ADS-B Exchange | Freemium | Posições ao vivo (sem filtro de cobertura) |
-| FlightAware AeroAPI | Pago | Dados completos e históricos |
+| API | Gratuita? | CORS no navegador? | Bom para |
+|-----|-----------|--------------------|----------|
+| **airplanes.live** | Sim | ✅ Sim — usada aqui | Posições ao vivo (ADS-B) |
+| adsb.lol / adsb.fi | Sim | Parcial | Posições ao vivo (ADS-B) |
+| OpenSky Network | Sim (com limites) | ❌ Não (só própria origem) | Posições ao vivo |
+| AviationStack | Freemium | — | Horários e status de voos |
+| FlightAware AeroAPI | Pago | — | Dados completos e históricos |
 
 ## 🗂️ Estrutura
 
@@ -75,7 +79,7 @@ rede colaborativa e gratuita de receptores ADS-B.
 radar-voos/
 ├── index.html   # estrutura da página e painéis
 ├── styles.css   # tema escuro e estilo dos componentes
-├── app.js       # lógica: mapa, consulta à OpenSky, marcadores
+├── app.js       # lógica: mapa, consulta à airplanes.live, marcadores
 └── README.md
 ```
 

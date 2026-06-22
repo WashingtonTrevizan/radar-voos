@@ -1,15 +1,18 @@
 /* ============================================================
    Radar de Voos — acompanhamento de voos ao vivo
-   Dados: OpenSky Network (https://opensky-network.org)
+   Dados: airplanes.live (https://airplanes.live)
+   API REST aberta, com CORS liberado (funciona direto no navegador).
    ============================================================ */
 
 // Posição inicial: região de São José dos Campos (SP)
 const SJC = { lat: -23.2287, lng: -45.8629, zoom: 9 };
 const REFRESH_MS = 12000; // intervalo de atualização automática
-const OPENSKY_URL = "https://opensky-network.org/api/states/all";
+const API_BASE = "https://api.airplanes.live/v2/point"; // /{lat}/{lon}/{raio_nm}
+const MAX_RADIUS_NM = 250; // limite da API
+const MIN_RADIUS_NM = 5;
 
 // ---- Estado global ----
-const markers = new Map(); // icao24 -> L.marker
+const markers = new Map(); // hex -> L.marker
 let refreshTimer = null;
 let inFlight = false; // evita requisições sobrepostas
 
@@ -44,18 +47,40 @@ const els = {
 
 // ---- Helpers ----------------------------------------------------
 
-/** Converte código de país em emoji de bandeira (melhor esforço). */
-const COUNTRY_FLAGS = {
-  Brazil: "🇧🇷", "United States": "🇺🇸", Argentina: "🇦🇷", Chile: "🇨🇱",
-  "United Kingdom": "🇬🇧", Germany: "🇩🇪", France: "🇫🇷", Spain: "🇪🇸",
-  Portugal: "🇵🇹", Italy: "🇮🇹", Netherlands: "🇳🇱", Canada: "🇨🇦",
-  Mexico: "🇲🇽", Colombia: "🇨🇴", Peru: "🇵🇪", Uruguay: "🇺🇾",
-  Paraguay: "🇵🇾", Panama: "🇵🇦", Turkey: "🇹🇷", Qatar: "🇶🇦",
-  "United Arab Emirates": "🇦🇪", China: "🇨🇳", Japan: "🇯🇵",
-};
-const flagFor = (country) => COUNTRY_FLAGS[country] || "🌐";
+/** Bandeira (emoji) a partir do prefixo da matrícula da aeronave. */
+const REG_FLAGS = [
+  [/^(PP|PR|PS|PT|PU|PV)/, "🇧🇷"], // Brasil
+  [/^N/, "🇺🇸"],                    // EUA
+  [/^LV/, "🇦🇷"],                   // Argentina
+  [/^CC/, "🇨🇱"],                   // Chile
+  [/^CX/, "🇺🇾"],                   // Uruguai
+  [/^ZP/, "🇵🇾"],                   // Paraguai
+  [/^HK/, "🇨🇴"],                   // Colômbia
+  [/^OB/, "🇵🇪"],                   // Peru
+  [/^HP/, "🇵🇦"],                   // Panamá
+  [/^XA|^XB|^XC/, "🇲🇽"],           // México
+  [/^C-?[FG]/, "🇨🇦"],              // Canadá
+  [/^G-/, "🇬🇧"],                   // Reino Unido
+  [/^D-/, "🇩🇪"],                   // Alemanha
+  [/^F-/, "🇫🇷"],                   // França
+  [/^EC/, "🇪🇸"],                   // Espanha
+  [/^CS/, "🇵🇹"],                   // Portugal
+  [/^I-/, "🇮🇹"],                   // Itália
+  [/^PH/, "🇳🇱"],                   // Holanda
+  [/^A6/, "🇦🇪"],                   // Emirados
+  [/^A7/, "🇶🇦"],                   // Catar
+  [/^TC/, "🇹🇷"],                   // Turquia
+  [/^B-?[0-9]/, "🇨🇳"],             // China
+  [/^JA/, "🇯🇵"],                   // Japão
+];
+function flagFor(reg) {
+  if (!reg) return "🌐";
+  const r = reg.toUpperCase();
+  for (const [re, flag] of REG_FLAGS) if (re.test(r)) return flag;
+  return "🌐";
+}
 
-/** Ícone SVG de avião, rotacionado pelo rumo (true_track). */
+/** Ícone SVG de avião, rotacionado pelo rumo (track). */
 function planeIcon(headingDeg, onGround) {
   const cls = onGround ? "plane-icon plane-icon--ground" : "plane-icon";
   const rot = Number.isFinite(headingDeg) ? headingDeg : 0;
@@ -88,47 +113,40 @@ function hideStatus() {
 
 // ---- Núcleo: busca e renderização --------------------------------
 
-/** Constrói o conteúdo HTML do popup a partir de um "state vector". */
+/** Constrói o conteúdo HTML do popup a partir de uma aeronave. */
 function popupHtml(s) {
-  const callsign = (s.callsign || "").trim() || s.icao24.toUpperCase();
-  const speedKmh = s.velocity != null ? s.velocity * 3.6 : null;
-  const speedKt = s.velocity != null ? s.velocity * 1.94384 : null;
-  const altM = s.geo_altitude ?? s.baro_altitude;
-  const altFt = altM != null ? altM * 3.28084 : null;
-  const vrate = s.vertical_rate;
+  const callsign = (s.flight || "").trim() || (s.r || "").trim() || s.hex.toUpperCase();
+  // Unidades da API: altitude em pés, velocidade em nós, subida em ft/min.
+  const onGround = s.alt_baro === "ground";
+  const altFt = onGround ? 0 : (s.alt_geom ?? (typeof s.alt_baro === "number" ? s.alt_baro : null));
+  const altM = altFt != null ? altFt * 0.3048 : null;
+  const speedKt = s.gs != null ? s.gs : null;
+  const speedKmh = speedKt != null ? speedKt * 1.852 : null;
+  const vrateMs = s.baro_rate != null ? s.baro_rate * 0.00508 : null; // ft/min -> m/s
 
   return `
     <div class="popup">
-      <h3><span class="flag">${flagFor(s.origin_country)}</span> ${callsign}</h3>
+      <h3><span class="flag">${flagFor(s.r)}</span> ${callsign}</h3>
       <table>
-        <tr><td>País</td><td>${s.origin_country || "—"}</td></tr>
-        <tr><td>Situação</td><td>${s.on_ground ? "No solo" : "Em voo"}</td></tr>
-        <tr><td>Altitude</td><td>${fmt(altM, " m")} (${fmt(altFt, " ft")})</td></tr>
+        <tr><td>Aeronave</td><td>${s.desc || s.t || "—"}</td></tr>
+        <tr><td>Matrícula</td><td>${s.r || "—"}</td></tr>
+        <tr><td>Situação</td><td>${onGround ? "No solo" : "Em voo"}</td></tr>
+        <tr><td>Altitude</td><td>${fmt(altFt, " ft")} (${fmt(altM, " m")})</td></tr>
         <tr><td>Velocidade</td><td>${fmt(speedKmh, " km/h")} (${fmt(speedKt, " kt")})</td></tr>
-        <tr><td>Rumo</td><td>${fmt(s.true_track, "°")}</td></tr>
-        <tr><td>Subida/descida</td><td>${fmt(vrate, " m/s", 1)}</td></tr>
-        <tr><td>ICAO24</td><td>${s.icao24}</td></tr>
+        <tr><td>Rumo</td><td>${fmt(s.track, "°")}</td></tr>
+        <tr><td>Subida/descida</td><td>${fmt(vrateMs, " m/s", 1)}</td></tr>
+        <tr><td>ICAO24</td><td>${s.hex}</td></tr>
         ${s.squawk ? `<tr><td>Squawk</td><td>${s.squawk}</td></tr>` : ""}
       </table>
     </div>`;
 }
 
-/** Transforma o array cru da OpenSky em objeto nomeado. */
-function parseState(a) {
-  return {
-    icao24: a[0],
-    callsign: a[1],
-    origin_country: a[2],
-    longitude: a[5],
-    latitude: a[6],
-    baro_altitude: a[7],
-    on_ground: a[8],
-    velocity: a[9],
-    true_track: a[10],
-    vertical_rate: a[11],
-    geo_altitude: a[13],
-    squawk: a[14],
-  };
+/** Raio (nm) que cobre a área visível do mapa, a partir do centro. */
+function visibleRadiusNm() {
+  const b = map.getBounds();
+  const meters = map.distance(b.getCenter(), b.getNorthEast());
+  const nm = Math.ceil(meters / 1852);
+  return Math.min(MAX_RADIUS_NM, Math.max(MIN_RADIUS_NM, nm));
 }
 
 async function fetchFlights() {
@@ -136,26 +154,20 @@ async function fetchFlights() {
   inFlight = true;
   els.refresh.disabled = true;
 
-  const b = map.getBounds();
-  const params = new URLSearchParams({
-    lamin: b.getSouth().toFixed(4),
-    lomin: b.getWest().toFixed(4),
-    lamax: b.getNorth().toFixed(4),
-    lomax: b.getEast().toFixed(4),
-  });
+  const c = map.getBounds().getCenter();
+  const url = `${API_BASE}/${c.lat.toFixed(4)}/${c.lng.toFixed(4)}/${visibleRadiusNm()}`;
 
   try {
-    const res = await fetch(`${OPENSKY_URL}?${params}`);
+    const res = await fetch(url);
     if (res.status === 429) {
       throw new Error(
-        "Limite de requisições da OpenSky atingido. Aguarde alguns segundos."
+        "Limite de requisições atingido. Aguarde alguns segundos."
       );
     }
-    if (!res.ok) throw new Error(`Erro ${res.status} ao consultar a OpenSky.`);
+    if (!res.ok) throw new Error(`Erro ${res.status} ao consultar os dados.`);
 
     const data = await res.json();
-    const states = (data.states || []).map(parseState);
-    render(states);
+    render(data.ac || []);
     hideStatus();
 
     const now = new Date();
@@ -178,18 +190,22 @@ async function fetchFlights() {
 }
 
 /** Atualiza/cria/remove marcadores conforme os dados recebidos. */
-function render(states) {
+function render(aircraft) {
   const seen = new Set();
+  const bounds = map.getBounds();
   let visible = 0;
 
-  for (const s of states) {
-    if (s.latitude == null || s.longitude == null) continue;
-    seen.add(s.icao24);
+  for (const s of aircraft) {
+    if (s.lat == null || s.lon == null) continue;
+    // A API consulta por raio (círculo); mostramos só o que está na área visível.
+    if (!bounds.contains([s.lat, s.lon])) continue;
+    seen.add(s.hex);
     visible++;
 
-    const latlng = [s.latitude, s.longitude];
-    const icon = planeIcon(s.true_track, s.on_ground);
-    let marker = markers.get(s.icao24);
+    const latlng = [s.lat, s.lon];
+    const onGround = s.alt_baro === "ground";
+    const icon = planeIcon(s.track, onGround);
+    let marker = markers.get(s.hex);
 
     if (marker) {
       marker.setLatLng(latlng);
@@ -198,7 +214,7 @@ function render(states) {
     } else {
       marker = L.marker(latlng, { icon }).bindPopup(popupHtml(s));
       marker.addTo(map);
-      markers.set(s.icao24, marker);
+      markers.set(s.hex, marker);
     }
   }
 

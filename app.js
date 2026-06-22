@@ -17,8 +17,13 @@ const MIN_RADIUS_NM = 5;
 // mantemos os aviões na tela e só alertamos após várias falhas seguidas.
 const FAIL_THRESHOLD = 5;
 
+// Rastro: nº máx. de pontos guardados por aeronave (~72 s de histórico a 1,2 s).
+const TRAIL_MAX_POINTS = 60;
+
 // ---- Estado global ----
 const markers = new Map(); // hex -> L.marker
+const trails = new Map(); // hex -> L.polyline (linha do rastro)
+const trailPts = new Map(); // hex -> [[lat, lon], ...] (posições observadas)
 let refreshTimer = null;
 let inFlight = false; // evita requisições sobrepostas
 let failStreak = 0; // falhas/limites consecutivos
@@ -50,6 +55,7 @@ const els = {
   autoRefresh: document.getElementById("autoRefresh"),
   locate: document.getElementById("locate"),
   sjc: document.getElementById("sjc"),
+  trails: document.getElementById("trails"),
 };
 
 // ---- Helpers ----------------------------------------------------
@@ -234,6 +240,8 @@ function render(aircraft) {
       marker.addTo(map);
       markers.set(s.hex, marker);
     }
+
+    if (els.trails.checked) pushTrail(s.hex, latlng);
   }
 
   // Remove aeronaves que saíram da área
@@ -241,10 +249,58 @@ function render(aircraft) {
     if (!seen.has(id)) {
       map.removeLayer(marker);
       markers.delete(id);
+      removeTrail(id);
     }
   }
 
   els.count.textContent = visible.toLocaleString("pt-BR");
+}
+
+// ---- Rastro (trajeto) -------------------------------------------
+
+/** Acrescenta a posição atual ao rastro da aeronave e desenha a linha. */
+function pushTrail(hex, latlng) {
+  let pts = trailPts.get(hex);
+  if (!pts) {
+    pts = [];
+    trailPts.set(hex, pts);
+  }
+  // Ignora se não houve movimento desde o último ponto.
+  const last = pts[pts.length - 1];
+  if (last && last[0] === latlng[0] && last[1] === latlng[1]) return;
+
+  pts.push(latlng);
+  if (pts.length > TRAIL_MAX_POINTS) pts.shift();
+
+  let line = trails.get(hex);
+  if (line) {
+    line.setLatLngs(pts);
+  } else if (pts.length >= 2) {
+    line = L.polyline(pts, {
+      color: "#4cc2ff",
+      weight: 2,
+      opacity: 0.5,
+      lineCap: "round",
+      lineJoin: "round",
+    }).addTo(map);
+    trails.set(hex, line);
+  }
+}
+
+/** Remove o rastro de uma aeronave (saiu da área ou rastro desligado). */
+function removeTrail(hex) {
+  const line = trails.get(hex);
+  if (line) {
+    map.removeLayer(line);
+    trails.delete(hex);
+  }
+  trailPts.delete(hex);
+}
+
+/** Apaga todos os rastros (ao desligar o toggle). */
+function clearTrails() {
+  for (const id of [...trails.keys()]) removeTrail(id);
+  trailPts.clear();
 }
 
 // ---- Agendamento de atualização ---------------------------------
@@ -262,6 +318,9 @@ function stopAutoRefresh() {
 // ---- Eventos ----------------------------------------------------
 els.refresh.addEventListener("click", fetchFlights);
 els.autoRefresh.addEventListener("change", startAutoRefresh);
+els.trails.addEventListener("change", () => {
+  if (!els.trails.checked) clearTrails(); // ao religar, o rastro reconstrói sozinho
+});
 els.sjc.addEventListener("click", () => map.setView([SJC.lat, SJC.lng], SJC.zoom));
 els.locate.addEventListener("click", () => {
   if (!navigator.geolocation) {

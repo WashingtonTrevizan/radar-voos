@@ -13,6 +13,7 @@ funciona para qualquer lugar do mundo: basta arrastar ou dar zoom.
 
 - 🗺️ Mapa escuro interativo (Leaflet + CARTO)
 - 🛩️ Ícones de avião que giram conforme o rumo real da aeronave
+- 🧵 Rastro (trajeto) desenhado atrás de cada aeronave — pode ligar/desligar
 - 🔄 Atualização automática a cada ~1,2 segundo (pode desligar)
 - 📍 Botão para centralizar na sua localização
 - 🛫 Atalho para São José dos Campos

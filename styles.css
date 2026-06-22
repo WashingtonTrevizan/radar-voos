@@ -1,0 +1,231 @@
+:root {
+  --bg: #0b1020;
+  --panel: rgba(16, 22, 41, 0.82);
+  --panel-solid: #101629;
+  --border: rgba(120, 150, 220, 0.18);
+  --text: #e8edf7;
+  --muted: #8a98b8;
+  --accent: #4cc2ff;
+  --accent-strong: #1d9bf0;
+  --danger: #ff6b6b;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --radius: 14px;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--bg);
+}
+
+/* Painel translúcido reutilizável */
+.panel {
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* Barra superior */
+#topbar {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 12px 18px;
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: auto;
+}
+
+.brand__icon {
+  font-size: 26px;
+  color: var(--accent);
+  filter: drop-shadow(0 0 8px rgba(76, 194, 255, 0.5));
+  transform: rotate(45deg);
+}
+
+.brand__text h1 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.3px;
+  font-weight: 700;
+}
+
+.brand__text p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stats {
+  display: flex;
+  gap: 24px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+
+.stat__value {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.stat__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn:hover { background: rgba(255, 255, 255, 0.1); border-color: var(--accent); }
+.btn:active { transform: translateY(1px); }
+
+.btn--primary {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  font-size: 16px;
+  padding: 8px 13px;
+}
+.btn--primary:hover { background: var(--accent); }
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+/* Status / erros */
+.status {
+  position: absolute;
+  bottom: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  max-width: 90vw;
+}
+.status--error { border-left-color: var(--danger); }
+.status--hidden { display: none; }
+
+/* Créditos */
+.credits {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  z-index: 1000;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(11, 16, 32, 0.6);
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+.credits a { color: var(--accent); text-decoration: none; }
+.credits a:hover { text-decoration: underline; }
+
+/* Ícone de avião no mapa */
+.plane-icon {
+  display: block;
+  transition: transform 0.3s ease;
+  color: var(--accent);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+.plane-icon--ground { color: var(--muted); }
+
+/* Popup do Leaflet em tema escuro */
+.leaflet-popup-content-wrapper {
+  background: var(--panel-solid);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.leaflet-popup-tip { background: var(--panel-solid); border: 1px solid var(--border); }
+.leaflet-popup-content { margin: 12px 14px; font-size: 13px; }
+
+.popup h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.popup table { width: 100%; border-collapse: collapse; }
+.popup td { padding: 2px 0; vertical-align: top; }
+.popup td:first-child { color: var(--muted); padding-right: 12px; white-space: nowrap; }
+.popup td:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+.popup .flag { font-size: 14px; }
+
+/* Atribuição do Leaflet */
+.leaflet-control-attribution { display: none; }
+
+@media (max-width: 760px) {
+  #topbar { gap: 12px; padding: 10px 12px; }
+  .brand__text p { display: none; }
+  .stats { gap: 16px; order: 3; width: 100%; }
+  .controls { order: 2; }
+}

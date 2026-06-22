@@ -6,7 +6,9 @@
 
 // Posição inicial: região de São José dos Campos (SP)
 const SJC = { lat: -23.2287, lng: -45.8629, zoom: 9 };
-const REFRESH_MS = 1000; // intervalo de atualização automática (1x por segundo — limite da airplanes.live)
+// Intervalo de atualização. A airplanes.live limita a ~1 req/s e barra exatamente
+// a 1000 ms; 1200 ms é o menor valor que roda limpo (sem 429) com margem.
+const REFRESH_MS = 1200;
 const API_BASE = "https://api.airplanes.live/v2/point"; // /{lat}/{lon}/{raio_nm}
 const MAX_RADIUS_NM = 250; // limite da API
 const MIN_RADIUS_NM = 5;

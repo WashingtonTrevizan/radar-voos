@@ -13,7 +13,7 @@ funciona para qualquer lugar do mundo: basta arrastar ou dar zoom.
 
 - 🗺️ Mapa escuro interativo (Leaflet + CARTO)
 - 🛩️ Ícones de avião que giram conforme o rumo real da aeronave
-- 🔄 Atualização automática a cada 1 segundo (pode desligar)
+- 🔄 Atualização automática a cada ~1,2 segundo (pode desligar)
 - 📍 Botão para centralizar na sua localização
 - 🛫 Atalho para São José dos Campos
 - 🖱️ Clique em um avião para ver detalhes (callsign, altitude, velocidade,
@@ -54,9 +54,10 @@ liberado** — por isso funciona direto do navegador, sem backend nem chave.
 - O app consulta o endpoint `/v2/point/{lat}/{lon}/{raio}`, usando o **centro
   da área visível** do mapa e um **raio** (em milhas náuticas) que cobre o que
   está na tela. Depois filtra os resultados pela bounding box visível.
-- Use com responsabilidade: a airplanes.live pede **no máximo ~1 requisição por
-  segundo**. O app atualiza a cada **1 s** (no limite) e tem proteção contra
-  requisições sobrepostas. Para mudar, ajuste `REFRESH_MS` em `app.js`.
+- Use com responsabilidade: a airplanes.live limita a **~1 requisição por
+  segundo** e recusa (HTTP 429) exatamente a 1000 ms. O app atualiza a cada
+  **~1,2 s** (menor intervalo que roda sem 429) e ainda tolera bloqueios
+  pontuais, mantendo os aviões na tela. Para mudar, ajuste `REFRESH_MS` em `app.js`.
 
 > **Por que não OpenSky?** A OpenSky passou a restringir o `Access-Control-Allow-Origin`
 > à própria origem, o que faz o navegador bloquear (erro "Failed to fetch") quando

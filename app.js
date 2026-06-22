@@ -6,15 +6,20 @@
 
 // Posição inicial: região de São José dos Campos (SP)
 const SJC = { lat: -23.2287, lng: -45.8629, zoom: 9 };
-const REFRESH_MS = 12000; // intervalo de atualização automática
+const REFRESH_MS = 1000; // intervalo de atualização automática (1x por segundo — limite da airplanes.live)
 const API_BASE = "https://api.airplanes.live/v2/point"; // /{lat}/{lon}/{raio_nm}
 const MAX_RADIUS_NM = 250; // limite da API
 const MIN_RADIUS_NM = 5;
+
+// A 1x/s a API às vezes responde 429 (limite). Tratamos isso como transitório:
+// mantemos os aviões na tela e só alertamos após várias falhas seguidas.
+const FAIL_THRESHOLD = 5;
 
 // ---- Estado global ----
 const markers = new Map(); // hex -> L.marker
 let refreshTimer = null;
 let inFlight = false; // evita requisições sobrepostas
+let failStreak = 0; // falhas/limites consecutivos
 
 // ---- Inicialização do mapa ----
 const map = L.map("map", { zoomControl: false, worldCopyJump: true }).setView(
@@ -159,15 +164,17 @@ async function fetchFlights() {
 
   try {
     const res = await fetch(url);
+    // 429 = limite momentâneo (comum a 1/s). Não é erro fatal: tenta de novo
+    // no próximo ciclo, mantendo os aviões já exibidos.
     if (res.status === 429) {
-      throw new Error(
-        "Limite de requisições atingido. Aguarde alguns segundos."
-      );
+      throttled();
+      return;
     }
     if (!res.ok) throw new Error(`Erro ${res.status} ao consultar os dados.`);
 
     const data = await res.json();
     render(data.ac || []);
+    failStreak = 0;
     hideStatus();
 
     const now = new Date();
@@ -177,15 +184,24 @@ async function fetchFlights() {
       second: "2-digit",
     });
   } catch (err) {
-    console.error(err);
-    showStatus(
-      err.message ||
-        "Não foi possível obter os dados. Verifique sua conexão.",
-      true
-    );
+    // "Failed to fetch" também ocorre quando um 429 vem sem cabeçalho CORS.
+    throttled(err);
   } finally {
     inFlight = false;
     els.refresh.disabled = false;
+  }
+}
+
+/** Falha transitória (limite/rede): só alerta após várias seguidas. */
+function throttled(err) {
+  failStreak++;
+  if (failStreak >= FAIL_THRESHOLD) {
+    if (err) console.error(err);
+    showStatus(
+      "Sem dados no momento — limite de requisições da API. " +
+        "Tentando novamente…",
+      true
+    );
   }
 }
 
